@@ -146,40 +146,53 @@ class Response():
 
         :raises ValueError: If the MIME type is unsupported.
         """
-        
-        base_dir = ""
-
-        # Processing mime_type based on main_type and sub_type
+        #Kiểm tra đảm bảo đầu vào là một chuỗi hợp lệ
+        if not isinstance(mime_type, str) or '/' not in mime_type:
+            raise ValueError("Invalid MIME type format: {!r}".format(mime_type))
+        #Tách chuỗi MIME type thành hai phần.
         main_type, sub_type = mime_type.split('/', 1)
-        print("[Response] processing MIME main_type={} sub_type={}".format(main_type,sub_type))
-        if main_type == 'text':
-            self.headers['Content-Type']='text/{}'.format(sub_type)
-            if sub_type == 'plain' or sub_type == 'css':
-                base_dir = BASE_DIR+"static/"
-            elif sub_type == 'html':
-                base_dir = BASE_DIR+"www/"
-            else:
-                handle_text_other(sub_type)
-        elif main_type == 'image':
-            base_dir = BASE_DIR+"static/"
-            self.headers['Content-Type']='image/{}'.format(sub_type)
-        elif main_type == 'application':
-            base_dir = BASE_DIR+"apps/"
-            self.headers['Content-Type']='application/{}'.format(sub_type)
-        #
-        #  TODO: process other mime_type
-        #        application/xml       
-        #        application/zip
-        #        ...
-        #        text/csv
-        #        text/xml
-        #        ...
-        #        video/mp4 
-        #        video/mpeg
-        #        ...
-        #
+        #.strip() và .lower() để loại bỏ khoảng trắng thừa và chuẩn hóa chữ thường.
+        main_type, sub_type = main_type.strip().lower(), sub_type.strip().lower()
+        print("[Response] processing MIME main_type={} | sub_type={}".format(main_type, sub_type))
+
+        # Khởi tạo headers nếu chưa có
+        if not hasattr(self, "headers") or self.headers is None:
+            self.headers = {}
+
+       
+        # NOTE: Keep www/ for html, static/ for assets, apps/ for app bundles.
+        base_map = {
+            "text/html":     os.path.join(BASE_DIR, "www"),
+            "text/css":      os.path.join(BASE_DIR, "static"),
+            "text/plain":    os.path.join(BASE_DIR, "static"),
+            "text/javascript": os.path.join(BASE_DIR, "static"),
+            "application/javascript": os.path.join(BASE_DIR, "static"),
+            "image":         os.path.join(BASE_DIR, "static"),
+            "font":          os.path.join(BASE_DIR, "static"),
+            "audio":         os.path.join(BASE_DIR, "static"),
+            "video":         os.path.join(BASE_DIR, "static"),
+            # For app payloads served as files (e.g., zip, wasm):
+            "application":   os.path.join(BASE_DIR, "apps"),
+        }
+
+        # Decide base_dir
+        full = f"{main_type}/{sub_type}"
+        if full in base_map:
+            base_dir = base_map[full]
+        elif main_type in base_map:
+            base_dir = base_map[main_type]
         else:
-            raise ValueError("Invalid MEME type: main_type={} sub_type={}".format(main_type,sub_type))
+            # Fallback to static for unknown types
+            base_dir = os.path.join(BASE_DIR, "static")
+
+        if main_type == "text":
+            self.headers["Content-Type"] = f"{full}; charset={'utf-8'}"
+        elif main_type == "application" and sub_type in {"json", "xml"}:
+            self.headers["Content-Type"] = full
+        elif main_type in {"image", "audio", "video", "font"}:
+            self.headers["Content-Type"] = full
+        else:
+            self.headers["Content-Type"] = full or "application/octet-stream"
 
         return base_dir
 
@@ -197,11 +210,14 @@ class Response():
         filepath = os.path.join(base_dir, path.lstrip('/'))
 
         print("[Response] serving the object at location {}".format(filepath))
-            #
-            #  TODO: implement the step of fetch the object file
-            #        store in the return value of content
-            #
-        return len(content), content
+        #đọc file và trả về nội dung
+        try:
+            with open(filepath, 'rb') as f:
+                content = f.read()
+            return len(content), content
+        except Exception as e:
+            print("[Response] Error reading file: {}".format(e))
+            return 0, b""
 
 
     def build_response_header(self, request):
@@ -238,15 +254,15 @@ class Response():
             }
 
         # Header text alignment
-            #
-            #  TODO: implement the header building to create formated
-            #        header from the provied headers
-            #
+        fmt_header = "HTTP/1.1 {} {}\r\n".format(self.status_code, self.reason)
+        
+        for key, value in headers.items():
+            fmt_header += "{}: {}\r\n".format(key, value)
+        
         #
         # TODO prepare the request authentication
-        #
-	# self.auth = ...
-        return str(fmt_header).encode('utf-8')
+        fmt_header += "\r\n"
+        return fmt_header.encode('utf-8')
 
 
     def build_notfound(self):
@@ -284,18 +300,42 @@ class Response():
 
         base_dir = ""
 
-        #If HTML, parse and serve embedded objects
-        if path.endswith('.html') or mime_type == 'text/html':
-            base_dir = self.prepare_content_type(mime_type = 'text/html')
-        elif mime_type == 'text/css':
-            base_dir = self.prepare_content_type(mime_type = 'text/css')
-        #
-        # TODO: add support objects
-        #
-        else:
+        try:
+            base_dir = self.prepare_content_type(mime_type=mime_type)
+        except ValueError:
+            print("[Response] Error preparing content type: {}".format())
             return self.build_notfound()
 
+        print("[Response] base_dir {}".format(base_dir))
+        print("[Response] path {}".format(path))
+
         c_len, self._content = self.build_content(path, base_dir)
+     #Kiểm tra file rỗng/không tồn tại
+        if c_len <= 0:
+            return self.build_notfound()
+
         self._header = self.build_response_header(request)
 
         return self._header + self._content
+    def compose(self, status: str = "200 OK", headers: dict | None = None, body: bytes | str = b""):
+        """
+        Build a full HTTP response bytes from status, headers and body.
+        This keeps one unified way to return responses from handlers.
+        """
+        headers = headers or {}
+        # Chuyển body sang bytes nếu nó là str
+        if isinstance(body, str):
+            body = body.encode("utf-8", "ignore")
+
+        # Đo độ dài body và thêm các header cần thiết
+        if "Content-Length" not in headers:
+            headers["Content-Length"] = str(len(body))
+        #Nếu  chưa set, nó tự động thêm Connection: close
+        if "Connection" not in headers:
+            headers["Connection"] = "close"
+
+        # Status-Line + headers
+        status_line = f"HTTP/1.1 {status}\r\n"
+        head = status_line + "".join(f"{k}: {v}\r\n" for k, v in headers.items()) + "\r\n"
+
+        return head.encode("utf-8") + body
