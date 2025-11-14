@@ -46,7 +46,6 @@ import argparse
 
 from .response import *
 from .httpadapter import HttpAdapter
-from .dictionary import CaseInsensitiveDict
 
 def handle_client(ip, port, conn, addr, routes):
     """
@@ -74,32 +73,30 @@ def run_backend(ip, port, routes):
     :param port (int): Port number to listen on.
     :param routes (dict): Dictionary of route handlers.
     """
+    # 1. Tạo 1 socket mạng
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
     try:
+        # 2. Gán địa chỉ ip và port cho socket
         server.bind((ip, port))
+        # 3. Lắng nghe tối đa 50 client
         server.listen(50)
         print("[Backend] Listening on port {}".format(port))
         if routes != {}:
-            print("[Backend] route settings {}".format(routes))
-
+            print("[Backend] Listening on port{}".format(routes))
         while True:
+            # 4. Chờ client kết nối tới
+            # addr: ip và port của client
             conn, addr = server.accept()
-            #
-            #  TODO: implement the step of the client incomping connection
-            #        using multi-thread programming with the
-            #        provided handle_client routine
-            #
-    except socket.error as e:
-      print("Socket error: {}".format(e))
+            # 5. Tạo thread xử lý client này để client kết nối khác không phải chờ
+            client_thread = threading.Thread(
+                target=handle_client,
+                args=(ip, port, conn, addr, routes),
+                daemon=True  
+            )
+            # 6. Thread xử lý client kết nối
+            client_thread.start()
+    except socket.error as e:   
+        print("Socket error: {}".format(e))
 
 def create_backend(ip, port, routes={}):
-    """
-    Entry point for creating and running the backend server.
-
-    :param ip (str): IP address to bind the server.
-    :param port (int): Port number to listen on.
-    :param routes (dict, optional): Dictionary of route handlers. Defaults to empty dict.
-    """
-
     run_backend(ip, port, routes)

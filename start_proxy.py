@@ -82,19 +82,33 @@ def parse_virtual_hosts(config_file):
             
         #
         # @bksysnet: Build the mapping and policy
-        # TODO: this policy varies among scenarios 
-        #       the default policy is provided with one proxy_pass
-        #       In the multi alternatives of proxy_pass then
-        #       the policy is applied to identify the highes matching
-        #       proxy_pass
         #
-        if len(proxy_map.get(host,[])) == 1:
-            routes[host] = (proxy_map.get(host,[])[0], dist_policy_map)
-        # esle if:
-        #         TODO:  apply further policy matching here
+        # Logic này định dạng 'routes' để hàm 'resolve_routing_policy'
+        # (trong daemon.proxy) có thể hiểu được.
+        #
+        # 1. Nếu CHÍNH XÁC 1 'proxy_pass', lưu nó dưới dạng string.
+        #    'resolve_routing_policy' sẽ xử lý trường hợp này.
+        #
+        # 2. Nếu 0 hoặc NHIỀU 'proxy_pass', lưu chúng dưới dạng list.
+        #    'resolve_routing_policy' cũng sẽ xử lý trường hợp này.
+        #
+        # Việc ÁP DỤNG policy (như round-robin) xảy ra trong
+        # 'resolve_routing_policy', không phải ở đây.
+        #
+        
+        current_proxy_list = proxy_map.get(host, [])
+
+        if len(current_proxy_list) == 1:
+            # Case 1: Một backend -> lưu
+            routes[host] = (current_proxy_list[0], dist_policy_map)
+        #
+        # (Phần 'esle if:' đã bị comment ra là không cần thiết)
         #
         else:
-            routes[host] = (proxy_map.get(host,[]), dist_policy_map)
+            # Case 2: 0 hoặc nhiều backend -> lưu cả list
+            routes[host] = (current_proxy_list, dist_policy_map)
+
+        # ---- END OF COMPLETED TODO ----
 
     for key, value in routes.items():
         print(key, value)
