@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Chat Application</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>Hybrid Chat App</h1>
+
+    <h3>Login to Chat Server</h3>
+    <input id="chatUser" placeholder="Your name">
+    <button onclick="loginChat()">Login</button>
+
+    <h3>Submit Peer Info</h3>
+    <input id="peerIP" placeholder="Your IP">
+    <input id="peerPort" placeholder="Your Port">
+    <button onclick="submitInfo()">Submit</button>
+
+    <h3>Active Peer List</h3>
+    <button onclick="getList()">Refresh</button>
+    <select id="peerList"></select>
+
+    <h3>Message</h3>
+    <div id="messages"></div>
+
+    <textarea id="msgInput" placeholder="Enter message..."></textarea>
+    <button onclick="broadcast()">Broadcast</button>
+    <button onclick="sendPeer()">Send to selected peer</button>
+</div>
+
+<script src="/static/js/chat.js"></script>
+</body>
+</html>
