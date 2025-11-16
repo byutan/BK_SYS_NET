@@ -34,7 +34,7 @@ PORT = 8000  # Default port
 
 app = WeApRous()
 
-@app.route('/login', methods=['POST'])
+@app.route('/login', methods=['POST','PUT'])
 def login(headers="guest", body="anonymous"):
     """
     Handle user login via POST request.
@@ -47,7 +47,7 @@ def login(headers="guest", body="anonymous"):
     """
     print ("[SampleApp] Logging in {} to {}".format(headers, body))
 
-@app.route('/hello', methods=['PUT'])
+@app.route('/hello', methods=['PUT','POST'])
 def hello(headers, body):
     """
     Handle greeting via PUT request.
@@ -59,6 +59,52 @@ def hello(headers, body):
     :param body (str): The request body or message payload.
     """
     print ("[SampleApp] ['PUT'] Hello in {} to {}".format(headers, body))
+
+
+@app.route('/send-peer', methods=['POST'])
+def send_peer(headers, body):
+    """Send message to a peer. Expects JSON body: {"ip":"x.x.x.x","port":8002,"message":"..."}
+
+    The handler connects to the peer's /p2p/receive endpoint and forwards the JSON payload.
+    Returns JSON {"status":"ok"} or error.
+    """
+    import json, socket
+    try:
+        payload = json.loads(body or '{}')
+    except Exception:
+        return {"error": "invalid json"}
+
+    ip = payload.get('ip')
+    port = int(payload.get('port') or 0)
+    message = payload.get('message')
+    if not ip or not port or message is None:
+        return {"error": "missing fields"}
+
+    # forward to peer
+    try:
+        b = json.dumps({'from': 'webapp', 'message': message}).encode('utf-8')
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(3)
+            s.connect((ip, port))
+            req = (
+                f"POST /p2p/receive HTTP/1.1\r\nHost: {ip}\r\nContent-Type: application/json\r\nContent-Length: {len(b)}\r\n\r\n"
+            ).encode('utf-8') + b
+            s.sendall(req)
+            _ = s.recv(4096)
+        return {"status": "ok"}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.route('/chat', methods=['GET'])
+def chat_page(headers, body):
+    """Serve the P2P chat web interface as HTML."""
+    try:
+        with open('www/chat.html', 'r', encoding='utf-8') as f:
+            html_content = f.read()
+        # Return as string (WeApRous will handle HTML rendering)
+        return html_content
+    except Exception as e:
+        return {"error": f"Failed to load chat page: {str(e)}"}
 
 if __name__ == "__main__":
     # Parse command-line arguments to configure server IP and port
@@ -72,4 +118,12 @@ if __name__ == "__main__":
 
     # Prepare and launch the RESTful application
     app.prepare_address(ip, port)
+    # Print registered routes for clarity
+    try:
+        print("[SampleApp] Registered routes:")
+        for (method, path), fn in app.routes.items():
+            print(f"  - {method} {path} -> {fn.__name__}")
+    except Exception:
+        pass
+
     app.run()

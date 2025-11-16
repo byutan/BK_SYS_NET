@@ -155,12 +155,21 @@ def handle_client(ip, port, conn, addr, routes):
         Referer: http://192.168.1.12:8080/login
         Accept-Encoding: gzip, deflate
     """
-    request = conn.recv(1024).decode()
-    
+    request = conn.recv(4096).decode(errors='ignore')
+
     #25 đọc hostname từ header 'Host'
+    hostname = None
     for line in request.splitlines():
         if line.lower().startswith('host:'):
-            hostname = line.split(':', 1)[1].strip() # 192.168.1.12:8080
+            # host header may contain ':' so split only on the first ':' occurrence
+            hostname = line.split(':', 1)[1].strip()  # e.g. '192.168.1.12:8080'
+            break
+    # If Host header missing, fall back to client's address:port to avoid crash
+    if not hostname:
+        try:
+            hostname = f"{addr[0]}:{port}"
+        except Exception:
+            hostname = ''
 
     print("[Proxy] {} at Host: {} Port: {}".format(addr, hostname, port))
 
