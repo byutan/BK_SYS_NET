@@ -3,7 +3,7 @@ Search IP LAN bằng cách: Terminal -> ipconfig -> dò IPv4 Address
 Vào config -> proxy.conf -> ở dòng host " " chỉnh thành IP Máy mình -> thêm trường proxy pass theo IP mình (cùng port)
 
 chạy các lệnh sau trên các terminal khác nhau
-Terminal 1: python start_sampleapp.py --server-ip <IP máy mày> --server-port 9000
+Terminal 1: python start_backend.py --server-ip <IP máy mày> --server-port 9000
 Terminal 2: python start_proxy.py --server-ip 0.0.0.0 --server-port 8080
 Terminal 3: python start_tracker.py --ip <IP máy mày> --server-port 9001
 Terminal 4: python start_peer.py --ip <IP máy mày> --port 10000 --name Bao1 --tracker-ip <IP máy mày> --tracker-port 9001
