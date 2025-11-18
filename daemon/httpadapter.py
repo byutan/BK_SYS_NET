@@ -168,8 +168,8 @@ class HttpAdapter:
         # Kiểm tra thông tin
         if creds.get("username") == "admin" and creds.get("password") == "password":
             # Nếu ĐÚNG:
-            # 1. Đặt đường dẫn thành /index.html để chuẩn bị phục vụ
-            req.path = "/index.html"
+            # 1. Đặt đường dẫn thành /chat.html để chuẩn bị phục vụ chat UI
+            req.path = "/chat.html"
             
             # 2. Xây dựng response cho file index.html
             #    (Hàm này sẽ gọi response.py để đọc file)
@@ -196,7 +196,7 @@ class HttpAdapter:
         - Trả về None (cho qua) hoặc (401 response) (chặn lại).
         """
         # Chỉ "gác cổng" cho trang / hoặc /index.html
-        if req.path in ("/", "/index.html"):
+        if req.path in ("/", "/index.html", "/chat.html"):
             
             # req.cookies (từ request.py) đã phân tích cookie cho ta
             if req.cookies.get("auth") != "true":
@@ -204,9 +204,9 @@ class HttpAdapter:
                 e = RESP_TEMPLATES["unauthorized"]
                 return (e["status"], {"Content-Type": e["content_type"], **e["headers"]}, e["body"])
         
-        # Sửa lỗi nhỏ: nếu request là "/", đổi thành "/index.html"
+        # Sửa lỗi nhỏ: nếu request là "/", đổi thành "/chat.html"
         if req.path == "/":
-            req.path = "/index.html"
+            req.path = "/chat.html"
             
         # Nếu có cookie, hoặc request đến file khác (.css), cho qua
         return None

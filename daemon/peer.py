@@ -24,6 +24,8 @@ class Peer:
         self.udp_port = udp_broadcast_port
         self.running = False
         self.messages = []
+        # recent message keys for short-window deduplication
+        self._recent_keys = {}
 
     def start(self):
         self.running = True
@@ -92,18 +94,82 @@ class Peer:
                     pass
                 return
             if method == 'POST' and path == '/p2p/receive':
+                # Simple, robust receive: parse JSON (or keep raw), store, print and respond.
                 try:
-                    obj = json.loads(content or '{}')
+                    try:
+                        obj = json.loads(content or '{}')
+                    except Exception:
+                        obj = {'raw': content}
+                    now_ts = time.time()
+                    obj['ts'] = now_ts
+                    # compute dedupe key from sender, channel and message
+                    sender = obj.get('from') if isinstance(obj.get('from'), dict) else obj.get('from')
+                    from_ip = ''
+                    from_port = 0
+                    if isinstance(sender, dict):
+                        from_ip = sender.get('ip', '')
+                        try:
+                            from_port = int(sender.get('port') or 0)
+                        except Exception:
+                            from_port = 0
+                    key_msg = (str(from_ip), str(from_port), str(obj.get('channel') or 'general'), str(obj.get('message') or obj.get('raw') or ''))
+                    key = '|'.join(key_msg)
+                    last = self._recent_keys.get(key)
+                    if last and (now_ts - last) < 2.0:
+                        # duplicate within 2s window — ignore
+                        # respond OK but do not append or print duplicate
+                        try:
+                            conn.sendall(self._build_response(200, {'status': 'duplicate_ignored'}))
+                        except Exception:
+                            pass
+                        return
+                    # not duplicate — record and append
+                    self._recent_keys[key] = now_ts
+                    # prune old keys occasionally
+                    if len(self._recent_keys) > 500:
+                        cutoff = now_ts - 5.0
+                        for k, t in list(self._recent_keys.items()):
+                            if t < cutoff:
+                                del self._recent_keys[k]
+                    self.messages.append(obj)
+                    # friendly debug log
+                    try:
+                        sender = obj.get('from') if isinstance(obj.get('from'), dict) else obj.get('from')
+                        sender_name = sender.get('name') if isinstance(sender, dict) else str(sender)
+                    except Exception:
+                        sender_name = 'unknown'
+                    channel = obj.get('channel') or 'general'
+                    message = obj.get('message') or obj.get('raw') or ''
+                    print(f"\n[Received from {sender_name} in {channel}]: {message}")
+                except Exception as e:
+                    print(f"[Peer:{self.name}] Error handling /p2p/receive: {e}")
+                try:
+                    conn.sendall(self._build_response(200, {'status': 'ok'}))
                 except Exception:
-                    obj = {'raw': content}
-                self.messages.append(obj)
-                sender_name = obj.get('from', {}).get('name', 'unknown') if isinstance(obj.get('from'), dict) else obj.get('from', 'unknown')
-                channel = obj.get('channel', 'default')
-                message = obj.get('message', '')
-                print(f"\n[Received from {sender_name} in {channel}]: {message}")
-                print(f"[{self.name}] > ", end='', flush=True)
-                resp = {'status':'ok'}
-                conn.sendall(self._build_response(200, resp))
+                    pass
+                return
+
+            # GET /peer-inbox returns and clears queued messages
+            if method == 'GET' and path == '/peer-inbox':
+                try:
+                    out = self.messages.copy()
+                    self.messages.clear()
+                    body = json.dumps(out).encode('utf-8')
+                    hdr = (
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: application/json; charset=utf-8\r\n"
+                        "Access-Control-Allow-Origin: *\r\n"
+                        "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+                        "Access-Control-Allow-Headers: Content-Type\r\n"
+                        f"Content-Length: {len(body)}\r\n"
+                        "Connection: close\r\n\r\n"
+                    ).encode('utf-8')
+                    conn.sendall(hdr + body)
+                except Exception:
+                    try:
+                        conn.sendall(self._build_response(500, {'error': 'failed to read inbox'}))
+                    except:
+                        pass
                 return
             conn.sendall(self._build_response(404, {'error':'not found'}))
         except Exception as e:

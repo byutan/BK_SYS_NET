@@ -138,14 +138,18 @@ def handle_http(conn, addr):
             pid = _peer_id(from_peer)
             entry = {'from': from_peer, 'message': message, 'ts': time.time()}
             with LOCK:
-                ch = CHANNELS.setdefault(channel, {'peers': set(), 'messages': []})
-                ch['messages'].append(entry)
-                # ensure sender is present
-                ch['peers'].add(pid)
-                peers = [PEERS[p] for p in ch['peers'] if p in PEERS]
-            # attempt to forward the message to peers' /p2p/receive endpoints
+                # Do not store or forward private messages via tracker — private messages should be direct P2P.
+                if channel == 'private':
+                    peers = []
+                else:
+                    ch = CHANNELS.setdefault(channel, {'peers': set(), 'messages': []})
+                    ch['messages'].append(entry)
+                    # ensure sender is present
+                    ch['peers'].add(pid)
+                    peers = [PEERS[p] for p in ch['peers'] if p in PEERS]
+            # attempt to forward the message to peers' /p2p/receive endpoints (only for non-private)
             try:
-                forward_results = _forward_to_peers(peers, entry, exclude_pid=pid)
+                forward_results = _forward_to_peers(peers, entry, exclude_pid=pid) if channel != 'private' else []
             except Exception:
                 forward_results = []
             # return list of peers and forwarding results
