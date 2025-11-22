@@ -80,9 +80,13 @@ def run_backend(ip, port, routes):
         server.bind((ip, port))
         # 3. Lắng nghe tối đa 50 client
         server.listen(50)
-        print("[Backend] Listening on port {}".format(port))
-        if routes != {}:
-            print("[Backend] Listening on port{}".format(routes))
+        # Log full bind address for easier LAN debugging
+        try:
+            print(f"[Backend] Listening on {ip}:{port}")
+        except Exception:
+            print("[Backend] Listening on port {}".format(port))
+        if routes:
+            print(f"[Backend] Routes: {routes}")
         while True:
             # 4. Chờ client kết nối tới
             # addr: ip và port của client

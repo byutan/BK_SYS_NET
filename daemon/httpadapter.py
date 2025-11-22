@@ -20,6 +20,7 @@ raw URL paths and RESTful route definitions, and integrates with
 Request and Response objects to handle client-server communication.
 """
 
+import socket
 from .request import Request
 from .response import Response
 from .dictionary import CaseInsensitiveDict
@@ -89,14 +90,15 @@ class HttpAdapter:
             # 2) Phân tích thành Request object
             self.parse_into_request(req, raw, routes)
                   
-            # --------------------------- Task 1 ---------------------------
-
+            # If WeApRous routes exist and we have a matching hook, dispatch to it
+            if req.hook:
+                return self.send(resp, self.handle_weaprous(req, resp))
+            
+            # Otherwise handle Task 1 (login + static files)
             # ----- Task 1A: /login (ưu tiên) ----
-            # Chỉ chạy logic này khi server chạy ở chế độ cơ bản (không có routes Task 2)
-            if len(routes) <= 0:
-                if req.method == "POST" and req.path == "/login":
-                    # Gọi hàm xử lý đăng nhập và gửi phản hồi
-                    return self.send(resp, self.handle_login(req, resp))
+            if req.method == "POST" and req.path == "/login":
+                # Gọi hàm xử lý đăng nhập và gửi phản hồi
+                return self.send(resp, self.handle_login(req, resp))
 
             # ----- Task 1B:  kiểm tra cookie -----
             early = self.cookie_auth_guard(req)
@@ -130,8 +132,18 @@ class HttpAdapter:
 
 # -------------------- I/O ----------------------------------------------------------------
     def read_from_socket(self, conn) -> str:
-#Chuyển đổi dữ liệu bytes thành chuỗi str/ 
-        return conn.recv(1024).decode("utf-8", "ignore")
+        """Read HTTP request from socket with timeout."""
+        try:
+            conn.settimeout(5)  # 5-second timeout
+            data = conn.recv(8192)  # Read more data at once
+            if not data:
+                return ""
+            return data.decode("utf-8", "ignore")
+        except socket.timeout:
+            return ""
+        except Exception as e:
+            print(f"[HttpAdapter] read_from_socket error: {e}")
+            return ""
 # -------------------- Parse ----------------------------------------------------------------
 
     def parse_into_request(self, req, raw: str, routes):
@@ -156,8 +168,8 @@ class HttpAdapter:
         # Kiểm tra thông tin
         if creds.get("username") == "admin" and creds.get("password") == "password":
             # Nếu ĐÚNG:
-            # 1. Đặt đường dẫn thành /index.html để chuẩn bị phục vụ
-            req.path = "/index.html"
+            # 1. Đặt đường dẫn thành /chat.html để chuẩn bị phục vụ chat UI
+            req.path = "/chat.html"
             
             # 2. Xây dựng response cho file index.html
             #    (Hàm này sẽ gọi response.py để đọc file)
@@ -184,7 +196,7 @@ class HttpAdapter:
         - Trả về None (cho qua) hoặc (401 response) (chặn lại).
         """
         # Chỉ "gác cổng" cho trang / hoặc /index.html
-        if req.path in ("/", "/index.html"):
+        if req.path in ("/", "/index.html", "/chat.html"):
             
             # req.cookies (từ request.py) đã phân tích cookie cho ta
             if req.cookies.get("auth") != "true":
@@ -192,9 +204,9 @@ class HttpAdapter:
                 e = RESP_TEMPLATES["unauthorized"]
                 return (e["status"], {"Content-Type": e["content_type"], **e["headers"]}, e["body"])
         
-        # Sửa lỗi nhỏ: nếu request là "/", đổi thành "/index.html"
+        # Sửa lỗi nhỏ: nếu request là "/", đổi thành "/chat.html"
         if req.path == "/":
-            req.path = "/index.html"
+            req.path = "/chat.html"
             
         # Nếu có cookie, hoặc request đến file khác (.css), cho qua
         return None
@@ -206,8 +218,67 @@ class HttpAdapter:
         2) Phục vụ file tĩnh (Task 1)
         """
         if req.hook: # req.hook sẽ None trong Task 1
-            return self.handle_weaprous(req, resp) # Sẽ không chạy ở Task 1
+            return self.handle_weaprous(req, resp) # handle registered WeApRous route
         return self.handle_static(req, resp) # Sẽ chạy ở Task 1
+
+    def handle_weaprous(self, req, resp):
+        """
+        Execute a WeApRous registered handler.
+
+        - Calls the function stored in req.hook with (headers, body) signature when possible.
+        - Supports handlers that return dict (JSON) or string/bytes.
+        - Returns the triple expected by send(): (status, headers, body)
+        """
+        func = req.hook
+        try:
+            # prepare arguments
+            body = req.body or b""
+            try:
+                body_text = body.decode('utf-8', 'ignore') if isinstance(body, (bytes, bytearray)) else str(body)
+            except Exception:
+                body_text = ''
+
+            # Try calling with (headers, body) then fallback to (body,) then no-arg
+            result = None
+            try:
+                result = func(req.headers, body_text)
+            except TypeError:
+                try:
+                    result = func(body_text)
+                except TypeError:
+                    result = func()
+
+            # Normalize result
+            if result is None:
+                # Handler performed side-effects; return 200 OK
+                return ("200 OK", {"Content-Type": "text/plain; charset=utf-8"}, b"OK")
+
+            if isinstance(result, (dict, list)):
+                import json
+                body_bytes = json.dumps(result).encode('utf-8')
+                headers = {"Content-Type": "application/json; charset=utf-8", "Content-Length": str(len(body_bytes))}
+                return ("200 OK", headers, body_bytes)
+
+            if isinstance(result, str):
+                body_bytes = result.encode('utf-8')
+                # Detect if it's HTML content
+                content_type = "text/html; charset=utf-8" if result.strip().startswith('<!DOCTYPE') or result.strip().startswith('<html') else "text/plain; charset=utf-8"
+                headers = {"Content-Type": content_type, "Content-Length": str(len(body_bytes))}
+                return ("200 OK", headers, body_bytes)
+
+            if isinstance(result, bytes):
+                headers = {"Content-Type": "application/octet-stream", "Content-Length": str(len(result))}
+                return ("200 OK", headers, result)
+
+            # Fallback
+            body_bytes = str(result).encode('utf-8')
+            headers = {"Content-Type": "text/plain; charset=utf-8", "Content-Length": str(len(body_bytes))}
+            return ("200 OK", headers, body_bytes)
+
+        except Exception as e:
+            # return 500
+            err = str(e).encode('utf-8')
+            return ("500 Internal Server Error", {"Content-Type": "text/plain; charset=utf-8", "Content-Length": str(len(err))}, err)
 
     def handle_static(self, req, resp):
         """
