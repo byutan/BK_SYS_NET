@@ -31,8 +31,12 @@ import argparse
 from daemon.weaprous import WeApRous
 
 PORT = 8000  # Default port
+CURRENT_PORT = 0
 
 app = WeApRous()
+@app.route('/', methods=['GET'])
+def home_page(headers, body):
+    return f"ON PORT: {CURRENT_PORT}"
 
 @app.route('/login', methods=['POST','PUT'])
 def login(headers="guest", body="anonymous"):
@@ -115,7 +119,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     ip = args.server_ip
     port = args.server_port
-
+    
+    CURRENT_PORT = port
     # Prepare and launch the RESTful application
     app.prepare_address(ip, port)
     # Print registered routes for clarity

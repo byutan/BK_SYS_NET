@@ -168,8 +168,8 @@ class HttpAdapter:
         # Kiểm tra thông tin
         if creds.get("username") == "admin" and creds.get("password") == "password":
             # Nếu ĐÚNG:
-            # 1. Đặt đường dẫn thành /chat.html để chuẩn bị phục vụ chat UI
-            req.path = "/chat.html"
+            # 1. Đặt đường dẫn thành /chat.html để chuẩn bị phục vụ chat UI (index.html cho task1A)
+            req.path = "/index.html"
             
             # 2. Xây dựng response cho file index.html
             #    (Hàm này sẽ gọi response.py để đọc file)

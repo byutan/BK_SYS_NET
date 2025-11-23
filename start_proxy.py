@@ -54,65 +54,80 @@ def parse_virtual_hosts(config_file):
     :config_file (str): Path to the NGINX config file.
     :rtype list of dict: Each dict contains 'listen'and 'server_name'.
     """
-
-    with open(config_file, 'r') as f:
-        config_text = f.read()
-
-    # Match each host block
+    # Đọc file
+    try:
+        with open(config_file, 'r') as f:
+            config_text = f.read()
+    except FileNotFoundError:
+        print(f"Error: Config file '{config_file}' not found.")
+        return {}
+    
+    # Tìm tất cả các block host
     host_blocks = re.findall(r'host\s+"([^"]+)"\s*\{(.*?)\}', config_text, re.DOTALL)
 
-    dist_policy_map = ""
-
     routes = {}
+
     for host, block in host_blocks:
-        proxy_map = {}
+        # 1. Lấy danh sách proxy_pass\
+        proxy_passes = re.findall(r'proxy_pass\s+(?:http://)?([^\s;]+);', block)
 
-        # Find all proxy_pass entries
-        proxy_passes = re.findall(r'proxy_pass\s+http://([^\s;]+);', block)
-        map = proxy_map.get(host,[])
-        map = map + proxy_passes
-        proxy_map[host] = map
+        # 2. Lấy policy (mặc định round-robin nếu không tìm thấy)
+        policy_match = re.search(r'dist_policy\s+([\w-]+)', block)
+        dist_policy = policy_match.group(1) if policy_match else 'round-robin'
 
-        # Find dist_policy if present
-        policy_match = re.search(r'dist_policy\s+(\w+)', block)
-        if policy_match:
-            dist_policy_map = policy_match.group(1)
-        else: #default policy is round_robin
-            dist_policy_map = 'round-robin'
-            
-        #
-        # @bksysnet: Build the mapping and policy
-        #
-        # Logic này định dạng 'routes' để hàm 'resolve_routing_policy'
-        # (trong daemon.proxy) có thể hiểu được.
-        #
-        # 1. Nếu CHÍNH XÁC 1 'proxy_pass', lưu nó dưới dạng string.
-        #    'resolve_routing_policy' sẽ xử lý trường hợp này.
-        #
-        # 2. Nếu 0 hoặc NHIỀU 'proxy_pass', lưu chúng dưới dạng list.
-        #    'resolve_routing_policy' cũng sẽ xử lý trường hợp này.
-        #
-        # Việc ÁP DỤNG policy (như round-robin) xảy ra trong
-        # 'resolve_routing_policy', không phải ở đây.
-        #
-        
-        current_proxy_list = proxy_map.get(host, [])
-
-        if len(current_proxy_list) == 1:
-            # Case 1: Một backend -> lưu
-            routes[host] = (current_proxy_list[0], dist_policy_map)
-        #
-        # (Phần 'esle if:' đã bị comment ra là không cần thiết)
-        #
+        # 3. Lưu vào routes dưới dạng list
+        if proxy_passes:
+            routes[host] = (proxy_passes, dist_policy)
         else:
-            # Case 2: 0 hoặc nhiều backend -> lưu cả list
-            routes[host] = (current_proxy_list, dist_policy_map)
+            print(f"Warning: Host '{host}' has no proxy_pass defined.")
 
-        # ---- END OF COMPLETED TODO ----
+        # Debug 
+        for key, value in routes.items():
+            print(f"Host: {key} -> Backends: {value[0]} | Policy: {value[1]}")
 
-    for key, value in routes.items():
-        print(key, value)
     return routes
+    # with open(config_file, 'r') as f:
+    #     config_text = f.read()
+
+    # # Match each host block
+    # host_blocks = re.findall(r'host\s+"([^"]+)"\s*\{(.*?)\}', config_text, re.DOTALL)
+
+    # dist_policy_map = ""
+
+    # routes = {}
+    # for host, block in host_blocks:
+    #     proxy_map = {}
+
+    #     # Find all proxy_pass entries
+    #     proxy_passes = re.findall(r'proxy_pass\s+http://([^\s;]+);', block)
+    #     map = proxy_map.get(host,[])
+    #     map = map + proxy_passes
+    #     proxy_map[host] = map
+
+    #     # Find dist_policy if present
+    #     policy_match = re.search(r'dist_policy\s+(\w+)', block)
+    #     if policy_match:
+    #         dist_policy_map = policy_match.group(1)
+    #     else: #default policy is round_robin
+    #         dist_policy_map = 'round-robin'
+        
+    #     current_proxy_list = proxy_map.get(host, [])
+
+    #     if len(current_proxy_list) == 1:
+    #         # Case 1: Một backend -> lưu
+    #         routes[host] = (current_proxy_list[0], dist_policy_map)
+    #     #
+    #     # (Phần 'esle if:' đã bị comment ra là không cần thiết)
+    #     #
+    #     else:
+    #         # Case 2: 0 hoặc nhiều backend -> lưu cả list
+    #         routes[host] = (current_proxy_list, dist_policy_map)
+
+    #     # ---- END OF COMPLETED TODO ----
+
+    # for key, value in routes.items():
+    #     print(key, value)
+    # return routes
 
 
 if __name__ == "__main__":
