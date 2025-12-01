@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>P2P Hybrid Chat - BK_SYS_NET</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        html, body { height: 100%; }
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            height: calc(100vh - 40px);
+            overflow: visible;
+            margin: 0 auto;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: #f5f5f5;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            height: 100%;
+        }
+        /* Sidebar children: keep top controls fixed, allow peer-list to scroll */
+        .sidebar .settings, .sidebar h3, .sidebar > div:not(.peer-list) { flex: none; }
+        .sidebar .peer-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+        
+        .sidebar h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .peer-list {
+            flex: 1;
+            overflow-y: auto;
+            margin-top: 10px;
+            margin-bottom: 0;
+        }
+
+        .online-popup {
+            position: fixed;
+            right: 30px;
+            top: 80px;
+            width: 320px;
+            max-height: 420px;
+            overflow: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 12px;
+            z-index: 9999;
+        }
+        .online-popup .item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+        }
+        .online-popup .item:hover { background:#f5f7ff }
+        .online-popup .close { position:absolute; left:8px; top:6px; cursor:pointer; color:#999 }
+
+        #notifications { margin-top:8px; }
+        .notification-item { padding:8px; background:#fff6ea; border:1px solid #ffe5b4; border-radius:6px; margin-bottom:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center }
+        .notification-item:hover{ background:#fff2d1 }
+        
+        .peer-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .peer-item:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .peer-item.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .channel-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+        
+        .btn:hover {
+            background: #764ba2;
+        }
+        
+        .btn.refresh {
+            margin-bottom: 10px;
+        }
+        
+        .chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            height: 100%;
+        }
+        /* Chat area children: header/status/input fixed, messages fill remaining */
+        .chat-area > h2, .chat-area > .status, .chat-area > .input-area { flex: none; }
+        
+        .messages {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            margin-bottom: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 18px;
+            background: linear-gradient(180deg,#ffffff, #fbfbfb);
+            min-height: 0; /* allow flex to size */
+            max-height: calc(100vh - 260px);
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            max-width: 72%;
+            word-wrap: break-word;
+        }
+        
+        .message.sent {
+            align-self: flex-end;
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            margin-right: 0;
+        }
+        
+        .message.received {
+            align-self: flex-start;
+            background: #e0e0e0;
+            color: #333;
+        }
+        
+        .message-time {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .msg-input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+        
+        .msg-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
+        }
+        
+        .send-btn {
+            padding: 12px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            min-width: 80px;
+        }
+        
+        .send-btn:hover {
+            background: #764ba2;
+        }
+        
+        .status {
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .status.error {
+            background: #ffcccc;
+            color: #cc0000;
+        }
+        
+        .status.success {
+            background: #ccffcc;
+            color: #009900;
+        }
+        
+        .settings {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        
+        .settings input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        #inboxNotifications { max-height: 140px; overflow-y: auto; margin-top:6px }
+        #notifications { max-height: 120px; overflow-y: auto }
+        .badge { background: #cc0000; color: #fff; padding: 2px 8px; border-radius: 999px; font-size: 12px }
+        
+        h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        /* Make sidebar and chat proportions nicer */
+        .container { max-width: 1100px }
+        .sidebar { width: 300px }
+        .chat-area { padding: 24px }
+        .debug-toggle { margin-top:8px; font-size:12px; color:#444; cursor:pointer }
+        /* Channel popup on the right of chat area */
+        .channel-popup {
+            position: absolute;
+            right: 40px;
+            top: 80px;
+            width: 260px;
+            max-height: 60vh;
+            overflow: auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            padding: 12px;
+            z-index: 9998;
+            display: none;
+        }
+        .channel-popup .chan-btn { margin-bottom:8px }
+        #debugPanel { position: fixed; right: 20px; bottom: 20px; width: 360px; max-height: 420px; overflow:auto; background: rgba(0,0,0,0.9); color: #fff; padding:12px; border-radius:8px; display:none; z-index:10000; font-size:12px }
+        #debugPanel pre { white-space:pre-wrap; color:#eee; font-size:12px }
+        #debugPanel .btn { width:auto; padding:6px 8px; font-size:12px; margin:4px }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <h3>Settings</h3>
+            <div class="settings">
+                <input type="text" id="peerIp" placeholder="Peer IP" value="10.128.5.39">
+                <input type="number" id="peerPort" placeholder="Peer Port" value="10000" min="1024" max="65535">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px">
+                    <input type="checkbox" id="useFixedPort" />
+                    <label for="useFixedPort" style="font-size:13px;margin:0">Use fixed port (use value above)</label>
+                </div>
+                <input type="text" id="trackerIp" placeholder="Tracker IP" value="10.128.5.39">
+                <input type="number" id="trackerPort" placeholder="Tracker Port" value="9001" min="1024" max="65535">
+                <input type="text" id="displayName" placeholder="Display name" value="WebApp">
+                <div style="display:flex;gap:8px;margin-top:8px">
+                    <button id="connectBtn" class="btn" onclick="initPeer()">Connect</button>
+                    <button class="btn refresh" id="logoutBtn" onclick="unregisterLocalPeer()" disabled>Logout</button>
+                </div>
+            </div>
+            
+            <h3>Online Peers</h3>
+            <div style="font-size:12px;margin:8px 0;color:#666">Mode:
+                <label style="margin-left:8px"><input type="radio" name="mode" value="channel" checked> Channel</label>
+                <label style="margin-left:8px"><input type="radio" name="mode" value="private"> Private</label>
+            </div>
+            <div id="privateTarget" style="display:none;margin-top:8px">
+                <input type="text" id="targetIp" placeholder="Target IP (peer)" style="margin-bottom:6px">
+                <input type="number" id="targetPort" placeholder="Target Port" style="margin-bottom:6px">
+                <button class="btn" onclick="setTargetPeerFromPrivate()">Connect Target</button>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn refresh" onclick="refreshOnlinePeers(true)">Refresh Online</button>
+
+            </div>
+            <!-- Top Mode display removed per request -->
+            <div id="onlineInline" style="margin-top:8px;max-height:140px;overflow:auto"></div>
+            <div id="inboxNotifications" style="margin-top:8px;margin-bottom:8px;font-size:13px;color:#333">
+                <!-- inbox notifications -->
+            </div>
+            <div id="notifications" aria-live="polite" style="margin-top:6px"></div>
+            <div class="debug-toggle" onclick="toggleDebug()">Toggle Debug Panel</div>
+
+            <h3>Channel</h3>
+            <div id="channelBlock">
+                <div id="channelList" style="display:flex;flex-direction:column;gap:6px">
+                    <!-- Channel buttons populated by JS -->
+                </div>
+            </div>
+
+            <div class="peer-list" id="peerList">
+                <div class="status">No peers connected</div>
+            </div>
+        </div>
+
+        <!-- Channel popup (right side of chat) -->
+        <div id="channelPopup" class="channel-popup" aria-hidden="true">
+            <h4 style="margin-top:0;margin-bottom:8px">Channels</h4>
+            <div id="channelPopupList"></div>
+        </div>
+
+        <div id="debugPanel" aria-hidden="true">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <strong>Debug Panel</strong>
+            <button class="btn" onclick="toggleDebug()">Close</button>
+        </div>
+        <div style="margin-bottom:8px">
+            <button class="btn" onclick="fetchInboxOnce()">Force Pull Inbox</button>
+            <button class="btn" onclick="renderDebugStorage()">Refresh</button>
+            <button class="btn" onclick="clearPrivateMessages()">Clear PrivateMsgs</button>
+        </div>
+        <div><strong>Selected Peer</strong><pre id="dbgSelected">-</pre></div>
+        <div><strong>Unread Private</strong><pre id="dbgUnread">-</pre></div>
+        <div><strong>PrivateMessages Keys</strong><pre id="dbgKeys">-</pre></div>
+        <div><strong>Last Inbox Events</strong><pre id="dbgEvents">-</pre></div>
+    </div>
+        
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+                <h2 id="chatTitle">P2P Hybrid Chat</h2>
+                <div style="display:flex;gap:8px;align-items:center">
+                    <button class="btn" style="padding:6px 10px;font-size:13px" onclick="toggleChannelPopup()">Channels</button>
+                </div>
+            </div>
+            <div class="status" id="status">Initializing...</div>
+            <div id="chatStatusStrip" style="display:flex;gap:12px;align-items:center;margin:8px 0;font-size:13px">
+                <div><strong>Mode:</strong> <span id="chatModeStrip">channel</span></div>
+                <div><strong>Online:</strong> <span id="chatOnlineCount">0</span></div>
+                <div><strong>Unread Private:</strong> <span id="chatUnreadCount">0</span></div>
+            </div>
+            
+            <div class="messages" id="messages"></div>
+            
+            <div class="input-area">
+                <input type="text" id="messageInput" class="msg-input" placeholder="Type a message..." autocomplete="off">
+                <button class="send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let localPeer = null;
+        let selectedPeer = null;
+        let currentChannel = 'general';
+        let allPeers = [];
+        let pollInterval = null;
+        let privateMessages = {}; // keyed by 'ip:port'
+        let peerInboxInterval = null;
+        let channelPollInterval = null;
+        let localPendingChannelMessages = []; // pending/sent messages for current channel (shown even if tracker down)
+        // UI state for channels/notifications
+        const CHANNELS = ['general','Channel 1','Channel 2','Channel 3','Channel 4'];
+        let unreadByChannel = {}; // channel -> count
+        let unreadPrivateByPeer = {}; // 'ip:port' -> count
+        let joinedChannels = {};
+        let knownPeers = {};
+
+        // Initialize peer
+        async function initPeer() {
+            const ip = (document.getElementById('peerIp').value || '').trim();
+            const portRaw = document.getElementById('peerPort').value;
+            const port = Number.isFinite(Number(portRaw)) ? parseInt(portRaw, 10) : NaN;
+            const trackerIp = document.getElementById('trackerIp').value;
+            const trackerPort = parseInt(document.getElementById('trackerPort').value);
+            const displayName = document.getElementById('displayName').value || 'WebApp';
+
+            // Input validation: require non-empty valid LAN IP or 'localhost', and a non-null numeric port
+            function isValidIPv4(addr){
+                if (!addr) return false;
+                if (addr === 'localhost') return true;
+                const parts = addr.split('.');
+                if (parts.length !== 4) return false;
+                for (const p of parts){
+                    if (!/^[0-9]+$/.test(p)) return false;
+                    const n = Number(p);
+                    if (n < 0 || n > 255) return false;
+                }
+                return true;
+            }
+            function isLanIp(addr){
+                if (!isValidIPv4(addr)) return false;
+                if (addr.startsWith('10.')) return true;
+                if (addr.startsWith('192.168.')) return true;
+                const second = Number(addr.split('.')[1]);
+                if (addr.startsWith('172.') && second >=16 && second <=31) return true;
+                // allow localhost as convenience
+                if (addr === 'localhost') return true;
+                return false;
+            }
+            function isValidPort(n){ return Number.isInteger(n) && n > 0 && n <= 65535; }
+
+            if (!isValidPort(port)){
+                updateStatus('Invalid port — please enter a numeric port (1-65535)', 'error');
+                try{ const el=document.getElementById('peerPort'); if (el){ el.focus(); el.select(); } }catch(e){}
+                return;
+            }
+            if (!isLanIp(ip)){
+                updateStatus('Invalid IP — please enter a LAN IPv4 address (e.g. 192.168.x.x or 10.x.x.x) or localhost', 'error');
+                try{ const el=document.getElementById('peerIp'); if (el){ el.focus(); el.select(); } }catch(e){}
+                return;
+            }
+
+            // Determine whether to use the configured fixed port or a per-tab ephemeral port
+            const useFixed = (() => { try { return !!document.getElementById('useFixedPort').checked; } catch(e){ return false; } })();
+            let finalPort = port;
+            if (!useFixed) {
+                // Use a per-tab ephemeral port so multiple browser tabs act as distinct peers
+                let webPort = sessionStorage.getItem('webPeerPort');
+                if (!webPort) {
+                    // prefer the user-provided port if they entered a different one; otherwise generate
+                    const base = Number.isFinite(port) ? port : 10000;
+                    webPort = (base + Math.floor(Math.random() * 1000)).toString();
+                    sessionStorage.setItem('webPeerPort', webPort);
+                }
+                finalPort = parseInt(webPort, 10) || port;
+            } else {
+                finalPort = port; // use exactly the port entered by user
+            }
+            // reflect chosen port back into UI
+            try { document.getElementById('peerPort').value = finalPort; } catch(e){}
+
+            localPeer = { ip, port: finalPort, trackerIp, trackerPort, name: displayName };
+
+            // Before attempting registration, ensure this ip:port is not already registered on the tracker
+            try{
+                const existingResp = await fetch(`http://${trackerIp}:${trackerPort}/get-list`);
+                if (existingResp && existingResp.ok){
+                    const js = await existingResp.json();
+                    const peers = js.peers || [];
+                    const already = peers.some(p => p.ip === localPeer.ip && Number(p.port) === Number(localPeer.port));
+                    if (already){
+                        updateStatus('Registration error: this IP:Port is already registered on the tracker', 'error');
+                        try{ const el=document.getElementById('peerPort'); if (el){ el.focus(); el.select(); } }catch(e){}
+                        return;
+                    }
+                }
+            }catch(e){
+                // If we cannot query tracker list, still attempt registration but warn in console
+                console.warn('Could not check existing peers before registration', e);
+            }
+
+            // Attempt to register this peer with the tracker. If registration fails we do not proceed to lock inputs.
+            try {
+                const resp = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/submit-info`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ip: localPeer.ip, port: localPeer.port, name: localPeer.name })
+                });
+                if (!resp || !resp.ok) {
+                    console.warn('Tracker registration failed', resp && resp.status);
+                    updateStatus('Failed to register with tracker — check IP/port and tracker availability', 'error');
+                    return;
+                }
+                updateStatus('Registered with tracker', 'success');
+            } catch (e) {
+                console.warn('Failed to register with tracker', e);
+                updateStatus('Failed to register with tracker — network error', 'error');
+                return;
+            }
+
+            // Lock IP/Port inputs and Connect button until logout
+            try{ document.getElementById('peerIp').disabled = true; }catch(e){}
+            try{ document.getElementById('peerPort').disabled = true; }catch(e){}
+            try{ document.getElementById('useFixedPort').disabled = true; }catch(e){}
+            try{ const cb = document.getElementById('connectBtn'); if (cb){ cb.disabled = true; cb.textContent = 'Connected'; } }catch(e){}
+
+            // Start polling for peers
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(refreshPeers, 2000);
+
+            // Start polling for channel notifications
+            if (channelPollInterval) clearInterval(channelPollInterval);
+            channelPollInterval = setInterval(pollChannelsForNotifications, 3000);
+
+            // mark 'general' as joined and render channel buttons
+            joinedChannels['general'] = true;
+            try { renderChannelButtons(); } catch(e){}
+
+            // enable logout button
+            try{ const lb = document.getElementById('logoutBtn'); if (lb){ lb.disabled = false; lb.textContent = 'Logout'; } }catch(e){}
+
+            // persist knownPeers (add self)
+            try{ const id = `${localPeer.ip}:${localPeer.port}`; knownPeers[id] = {info: localPeer, lastSeen: Date.now()}; localStorage.setItem('knownPeers', JSON.stringify(knownPeers)); }catch(e){}
+
+            // start web inbox polling so tracker queued private messages arrive
+            try{ startWebInboxPolling(); }catch(e){}
+
+            refreshPeers();
+            // also refresh the online list inline so users see peers immediately after Connect
+            try { refreshOnlinePeers(false); } catch(e) { console.warn('refreshOnlinePeers on init failed', e); }
+            // render local inbox immediately so incoming messages (if any) are visible
+            try { renderInbox(); } catch(e) { console.warn('renderInbox on init failed', e); }
+            // open channel popup by default after connect so channels are visible
+            try { const cp = document.getElementById('channelPopup'); if (cp) cp.style.display = 'block'; } catch(e) {}
+            // hide the inline channel block in sidebar (we use the popup)
+            try { const cb = document.getElementById('channelBlock'); if (cb) cb.style.display = 'none'; } catch(e) {}
+        }
+
+        // Join a channel (prompt for password). Only set currentChannel after successful join.
+        async function joinChannel(channel) {
+            if (!channel) {
+                updateStatus('Channel name cannot be empty', 'error');
+                return;
+            }
+            if (!localPeer) {
+                updateStatus('Please initialize peer first', 'error');
+                return;
+            }
+            // require password equal to channel name
+            const pw = prompt(`Enter password to join channel '${channel}':`, '');
+            if (pw === null) return; // cancelled
+            if (pw !== channel) { alert('Incorrect password for channel ' + channel); return; }
+            joinedChannels[channel] = true;
+            currentChannel = channel;
+            unreadByChannel[channel] = 0;
+            updateStatus(`Joined channel: #${channel}`, 'success');
+            document.getElementById('messages').innerHTML = '';
+            renderChannelButtons();
+            // inform tracker that this peer joined the channel so other clients can see membership
+            try{
+                await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/add-list`, {
+                    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ channel: channel, peer: { ip: localPeer.ip, port: localPeer.port, name: localPeer.name } })
+                });
+            }catch(e){ console.warn('Failed to notify tracker of channel join', e); }
+            refreshPeers();
+            // update header title
+            try{ updateChatTitle(); }catch(e){}
+        }
+
+        // Refresh peer list
+        async function refreshPeers() {
+            if (!localPeer) return;
+            const mode = document.querySelector('input[name="mode"]:checked') ? document.querySelector('input[name="mode"]:checked').value : 'channel';
+
+            try {
+                // Always refresh peer list from tracker (best-effort) but only render channel messages when in channel mode.
+                const response = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/get-list?channel=${currentChannel}`);
+                const dataText = await response.text();
+                let data = {};
+                try { data = JSON.parse(dataText); } catch(e){ /* ignore parse errors */ }
+                allPeers = data.peers || [];
+                // Populate senderSelect with available identities (peers + local)
+                try {
+                    const senderSelect = document.getElementById('senderSelect');
+                    if (senderSelect) {
+                        const prev = senderSelect.value;
+                        senderSelect.innerHTML = '<option value="">(use display name)</option>';
+                    }
+                } catch(e) { console.warn('senderSelect update failed', e); }
+                // Render channel messages returned by tracker (only when in channel mode)
+                const messages = data.messages || [];
+                const messagesDiv = document.getElementById('messages');
+                if (mode !== 'private') {
+                    messagesDiv.innerHTML = '';
+                    for (const m of messages) {
+                        const text = `${m.from && m.from.name ? m.from.name : 'peer'}: ${m.message}`;
+                        const type = (m.from && m.from.ip === localPeer.ip && m.from.port === localPeer.port) ? 'sent' : 'received';
+                        // tracker messages use ts in seconds
+                        addMessage(text, type, m.ts || m.time || m.ts);
+                    }
+                    // Render any local pending channel messages that aren't duplicated by tracker messages (and match currentChannel)
+                    try {
+                        for (const localMsg of localPendingChannelMessages.filter(l => l.channel === currentChannel)) {
+                            const exists = messages.some(r => (r.message === localMsg.message) && (r.from && r.from.ip === localMsg.from.ip) && (Number(r.from.port) === Number(localMsg.from.port)) );
+                            if (!exists) {
+                                const text = `${localMsg.from && localMsg.from.name ? localMsg.from.name : 'me'}: ${localMsg.message}`;
+                                addMessage(text, 'sent', localMsg.ts || localMsg.ts_ms || Date.now());
+                            }
+                        }
+                    } catch(e) { console.warn('render pending failed', e); }
+                } else {
+                    // Private mode: do not clear the messages area here; instead, re-render private conversation if a peer is selected
+                    if (selectedPeer) {
+                        try { renderPrivateMessagesFor(selectedPeer); } catch(e) { console.warn('render private failed', e); }
+                    }
+                }
+                
+                // Filter out self
+                const otherPeers = allPeers.filter(p => !(p.ip === localPeer.ip && p.port === localPeer.port));
+                const peerList = document.getElementById('peerList');
+                if (otherPeers.length === 0) {
+                    peerList.innerHTML = '<div class="status">No other peers in channel</div>';
+                } else {
+                    peerList.innerHTML = otherPeers.map(p => `
+                        <div class="peer-item ${selectedPeer && selectedPeer.ip === p.ip && selectedPeer.port === p.port ? 'active' : ''}" 
+                                 onclick="selectPeer({ip: '${p.ip}', port: ${p.port}, name: '${p.name}'})">
+                            <div style="display:flex;flex-direction:column"><strong>${p.name}</strong><small style=\"color:#666\">${p.ip}:${p.port}</small></div>
+                            <div>${unreadPrivateByPeer[`${p.ip}:${p.port}`] ? '<span class="badge">' + unreadPrivateByPeer[`${p.ip}:${p.port}`] + '</span>' : ''}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error('Failed to refresh peers:', e);
+            }
+        }
+
+        // Render fixed channel buttons and unread badges
+        function renderChannelButtons(){
+            const block = document.getElementById('channelList');
+            block.innerHTML = '';
+            // Also populate the channel popup list if present
+            const popupList = document.getElementById('channelPopupList');
+            if (popupList) popupList.innerHTML = '';
+            for (const ch of CHANNELS){
+                const btn = document.createElement('button');
+                btn.className = 'btn';
+                btn.style.display = 'flex';
+                btn.style.justifyContent = 'space-between';
+                btn.style.alignItems = 'center';
+                btn.style.padding = '8px 10px';
+                btn.style.marginBottom = '4px';
+                btn.textContent = ch;
+                if (currentChannel === ch) btn.classList.add('active');
+                btn.onclick = async () => {
+                    // switch mode to channel
+                    try { document.querySelector('input[name="mode"][value="channel"]').checked = true; onModeChange(); } catch(e){}
+                    if (joinedChannels[ch]){ currentChannel = ch; unreadByChannel[ch]=0; renderChannelButtons(); refreshPeers(); return; }
+                    // prompt for password and join (do not set currentChannel until password accepted)
+                    joinChannel(ch);
+                };
+                const badge = document.createElement('span');
+                badge.className = 'badge';
+                badge.style.marginLeft = '8px';
+                badge.textContent = (unreadByChannel[ch]||0) > 0 ? (unreadByChannel[ch]||0) : '';
+                btn.appendChild(badge);
+                block.appendChild(btn);
+                if (popupList){
+                    const pbtn = btn.cloneNode(true);
+                    pbtn.className = 'btn chan-btn';
+                    // ensure cloned button triggers same join flow
+                    pbtn.onclick = btn.onclick;
+                    popupList.appendChild(pbtn);
+                }
+            }
+        }
+
+        // Poll tracker channels for new message counts and produce notifications
+        async function pollChannelsForNotifications(){
+            if (!localPeer) return;
+            for (const ch of CHANNELS){
+                try{
+                    const res = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/get-list?channel=${encodeURIComponent(ch)}`);
+                    if (!res.ok) continue;
+                    const js = await res.json();
+                    const msgs = js.messages || [];
+                    const baselineKey = `__count__${ch}`;
+                    if (unreadByChannel[baselineKey] === undefined){ unreadByChannel[baselineKey] = msgs.length; if (!unreadByChannel[ch]) unreadByChannel[ch]=0; }
+                    else if (msgs.length > unreadByChannel[baselineKey]){
+                        const diff = msgs.length - unreadByChannel[baselineKey];
+                        if (currentChannel !== ch){ unreadByChannel[ch] = (unreadByChannel[ch]||0) + diff; showNotification(`New messages in ${ch}`, `${diff} new`); addChannelNotification(ch, diff); }
+                        unreadByChannel[baselineKey] = msgs.length;
+                    } else {
+                        unreadByChannel[baselineKey] = msgs.length;
+                    }
+                }catch(e){ /* ignore per-channel errors */ }
+            }
+            renderChannelButtons();
+        }
+
+        function addChannelNotification(channel, count){
+            try{
+                const container = document.getElementById('notifications');
+                if (!container) return;
+                const id = `chan-${channel}`;
+                // remove existing
+                const existing = document.getElementById(id);
+                if (existing) existing.remove();
+                const el = document.createElement('div'); el.id = id; el.className='notification-item';
+                el.innerHTML = `<div style="font-weight:600">#${channel}</div><div style="color:#444">${count} new</div>`;
+                el.onclick = function(){ try{ document.querySelector('input[name="mode"][value="channel"]').checked = true; onModeChange(); currentChannel=channel; unreadByChannel[channel]=0; renderChannelButtons(); refreshPeers(); }catch(e){} };
+                container.prepend(el);
+            }catch(e){ }
+        }
+
+        // Show a small toast
+        function showNotification(title, body){
+            try{ const t = document.createElement('div'); t.style.position='fixed'; t.style.right='20px'; t.style.top='20px'; t.style.background='#333'; t.style.color='white'; t.style.padding='8px 12px'; t.style.borderRadius='6px'; t.style.zIndex=9999; t.textContent = title + ' — ' + body; document.body.appendChild(t); setTimeout(()=>t.remove(),3500); }catch(e){}
+        }
+
+        // Show a small inbox popup for incoming private messages (click to reply)
+        function showInboxPopup(peerObj, text){
+            try{
+                // container for stacked inbox popups
+                let container = document.getElementById('inboxPopupContainer');
+                if (!container){
+                    container = document.createElement('div');
+                    container.id = 'inboxPopupContainer';
+                    container.style.position = 'fixed';
+                    container.style.right = '20px';
+                    container.style.bottom = '20px';
+                    container.style.zIndex = 10001;
+                    container.style.display = 'flex';
+                    container.style.flexDirection = 'column';
+                    container.style.gap = '8px';
+                    document.body.appendChild(container);
+                }
+                const id = `inbox-popup-${Date.now()}-${Math.random().toString(36).slice(2,6)}`;
+                const el = document.createElement('div');
+                el.id = id;
+                el.style.background = '#ffffff';
+                el.style.border = '1px solid #ddd';
+                el.style.padding = '10px 12px';
+                el.style.borderRadius = '8px';
+                el.style.boxShadow = '0 8px 20px rgba(0,0,0,0.12)';
+                el.style.minWidth = '220px';
+                el.style.cursor = 'pointer';
+                el.innerHTML = `<div style="font-weight:600;margin-bottom:6px">${peerObj.name||peerObj.ip+':'+peerObj.port}</div><div style="font-size:13px;color:#333">${String(text).slice(0,140)}</div>`;
+                el.onclick = function(){
+                    try{ selectPeer(peerObj); }catch(e){}
+                    el.remove();
+                };
+                container.prepend(el);
+                // auto-dismiss after some seconds
+                setTimeout(()=>{ try{ el.remove(); }catch(e){} }, 8000);
+            }catch(e){ console.warn('showInboxPopup failed', e); }
+        }
+
+        // Refresh online peers (global). showPopup=true will open the global online popup.
+        async function refreshOnlinePeers(showPopup=false){
+            if (!localPeer) return;
+            try{
+                const res = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/get-list`);
+                if (!res.ok) return;
+                const js = await res.json();
+                const online = js.peers || [];
+                // merge into knownPeers
+                const now = Date.now();
+                for (const p of online){ knownPeers[`${p.ip}:${p.port}`] = {info:p,lastSeen:now}; }
+                localStorage.setItem('knownPeers', JSON.stringify(knownPeers));
+                const filtered = online.filter(p=>!(p.ip===localPeer.ip && Number(p.port)===Number(localPeer.port)));
+
+                if (showPopup) showOnlinePopup(filtered);
+
+                // render inline online list
+                try{
+                    const inline = document.getElementById('onlineInline');
+                    if (inline){
+                            if (!filtered || filtered.length===0) inline.innerHTML = '<div style="color:#666;font-size:13px">No peers online</div>';
+                            else {
+                                // build a map of peer -> channel(s) by querying channel lists
+                                const channelMap = {};
+                                for (const ch of CHANNELS){
+                                    try{
+                                        const r = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/get-list?channel=${encodeURIComponent(ch)}`);
+                                        if (!r.ok) continue;
+                                        const j = await r.json();
+                                        const peersInCh = j.peers || [];
+                                        for (const pp of peersInCh){
+                                            const pid = `${pp.ip}:${pp.port}`;
+                                            channelMap[pid] = channelMap[pid] || [];
+                                            channelMap[pid].push(ch);
+                                        }
+                                    }catch(_e){ /* ignore per-channel fetch errors */ }
+                                }
+                                inline.innerHTML = filtered.map(p=>{
+                                    const pid = `${p.ip}:${p.port}`;
+                                    const chs = channelMap[pid] ? (' · #' + channelMap[pid].join(',#')) : '';
+                                    return `<div class="peer-item" style="padding:6px;margin-bottom:6px" onclick="selectPeer({ip:'${p.ip}',port:${p.port},name:'${p.name}'})"><div style=\"display:flex;justify-content:space-between;align-items:center\"><div><strong>${p.name}</strong><br><small style='color:#666'>${p.ip}:${p.port}${chs}</small></div><div><button class="btn" style="padding:6px 8px;margin-left:8px">Chat</button></div></div></div>`;
+                                }).join('');
+                            }
+                        }
+                }catch(e){ console.warn('render inline online failed', e); }
+
+                // update peer list and counters
+                refreshPeers();
+                try{ const onlineCount = (filtered && filtered.length) ? filtered.length : 0; const el = document.getElementById('chatOnlineCount'); if (el) el.textContent = onlineCount; }catch(e){}
+                try{ const ms = document.getElementById('chatModeStrip'); if (ms) ms.textContent = (document.querySelector('input[name="mode"]:checked')||{value:'channel'}).value; }catch(e){}
+            }catch(e){ console.warn('refreshOnlinePeers failed', e); }
+        }
+
+        function showOnlinePopup(peers){
+            // create popup if missing
+            let popup = document.getElementById('onlinePopup');
+            if (!popup){
+                popup = document.createElement('div'); popup.id='onlinePopup'; popup.className='online-popup'; popup.innerHTML = `<span class="close" onclick="hideOnlinePopup()">×</span><h4>Online Peers</h4><div style="margin:8px 0"><button class="btn refresh" onclick="refreshOnlinePeers(true)" style="width:100%">Refresh Online</button></div><div class="list" id="onlineList"></div>`; document.body.appendChild(popup);
+                    // add a small hide-inline button to allow hiding the sidebar inline online list
+                    try{
+                        const hdr = popup.querySelector('h4');
+                    if (hdr){
+                            const hideBtn = document.createElement('button');
+                            hideBtn.className = 'btn';
+                            hideBtn.style.padding = '4px 8px';
+                            hideBtn.style.marginLeft = '8px';
+                            hideBtn.style.fontSize = '12px';
+                            hideBtn.textContent = 'X';
+                            hideBtn.onclick = hideOnlinePopup; // close the popup
+                            hdr.appendChild(hideBtn);
+                        }
+                    }catch(e){}
+            }
+            const list = popup.querySelector('#onlineList');
+            (async ()=>{
+                // build mapping peer -> channels
+                const channelMap = {};
+                for (const ch of CHANNELS){
+                    try{
+                        const r = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/get-list?channel=${encodeURIComponent(ch)}`);
+                        if (!r.ok) continue;
+                        const j = await r.json();
+                        const peersInCh = j.peers || [];
+                        for (const pp of peersInCh){
+                            const pid = `${pp.ip}:${pp.port}`;
+                            channelMap[pid] = channelMap[pid] || [];
+                            channelMap[pid].push(ch);
+                        }
+                    }catch(_e){ }
+                }
+                if (!peers || peers.length===0) list.innerHTML = '<div style="color:#666;font-size:13px">No peers</div>';
+                else list.innerHTML = peers.map(p=>{ const pid=`${p.ip}:${p.port}`; const chs = channelMap[pid] ? (' · #' + channelMap[pid].join(',#')) : ''; return `<div class="item" onclick="selectPeer({ip:'${p.ip}',port:${p.port},name:'${p.name}'})"><div style=\"font-size:13px;font-weight:600\">${p.name}</div><div style=\"color:#666;font-size:12px\">${p.ip}:${p.port}${chs}</div></div>`; }).join('');
+            })();
+            popup.style.display='block'; popup.setAttribute('aria-hidden','false');
+            // also update inline list and mode indicator when showing popup
+            try{ const ms = document.getElementById('chatModeStrip'); if (ms) ms.textContent = (document.querySelector('input[name="mode"]:checked')||{value:'channel'}).value; }catch(e){}
+        }
+
+        
+
+        function toggleChannelPopup(){
+            try{
+                const cp = document.getElementById('channelPopup');
+                if (!cp) return;
+                if (cp.style.display === 'block') { cp.style.display = 'none'; cp.setAttribute('aria-hidden','true'); }
+                else { cp.style.display = 'block'; cp.setAttribute('aria-hidden','false'); }
+            }catch(e){ console.warn('toggleChannelPopup failed', e); }
+        }
+        
+
+        function hideOnlinePopup(){ const p = document.getElementById('onlinePopup'); if (p){ p.style.display='none'; p.setAttribute('aria-hidden','true'); } }
+
+        // Toggle visibility of the inline online peers list in the sidebar
+        function toggleInlineOnlineList(){
+            try{
+                const inline = document.getElementById('onlineInline');
+                if (!inline) return;
+                if (inline.style.display === 'none' || getComputedStyle(inline).display === 'none'){
+                    inline.style.display = '';
+                } else {
+                    inline.style.display = 'none';
+                }
+            }catch(e){ console.warn('toggleInlineOnlineList failed', e); }
+        }
+
+        // Update chat title to reflect current context: channel or selected peer
+        function updateChatTitle(){
+            try{
+                const base = 'P2P Hybrid Chat';
+                const mode = document.querySelector('input[name="mode"]:checked') ? document.querySelector('input[name="mode"]:checked').value : 'channel';
+                if (mode === 'private' && selectedPeer){
+                    // In private mode show only the peer name (no channel annotations)
+                    document.getElementById('chatTitle').textContent = `Chatting with ${selectedPeer.name}`;
+                } else {
+                    // channel mode — show the current channel
+                    const ch = currentChannel || 'general';
+                    document.getElementById('chatTitle').textContent = `${base} - Channel: #${ch}`;
+                }
+            }catch(e){ console.warn('updateChatTitle failed', e); }
+        }
+
+        // Inbox UI helpers
+        function addInboxNotification(peerObj, text){
+            try{
+                const container = document.getElementById('inboxNotifications');
+                if (!container) return;
+                const id = `${peerObj.ip}:${peerObj.port}`;
+                const el = document.createElement('div'); el.className='peer-item'; el.style.cursor='pointer';
+                el.dataset.peer = id;
+                el.innerHTML = `<div style="display:flex;flex-direction:column;"><strong style=\"font-size:13px\">${peerObj.name||id}</strong><small style=\"color:#666\">${id}</small></div><div style=\"text-align:right\"><small style=\"font-size:12px;color:#333\">New</small></div>`;
+                el.onclick = function(){
+                    // ensure port is numeric
+                    try{ peerObj.port = Number(peerObj.port) || 0; }catch(e){}
+                    selectPeer(peerObj);
+                    el.remove();
+                };
+                container.prepend(el);
+                // also add to notifications list for quick reply
+                try{
+                    const notifContainer = document.getElementById('notifications');
+                    if (notifContainer){
+                        const nid = `notif-${id}`;
+                        const existing = document.getElementById(nid);
+                        if (existing) existing.remove();
+                        const item = document.createElement('div'); item.id = nid; item.className='notification-item';
+                        item.innerHTML = `<div style="font-weight:600">New private from ${peerObj.name||id}</div><div style="color:#444">Reply</div>`;
+                        item.onclick = function(){ selectPeer(peerObj); try{ document.getElementById(nid).remove(); }catch(e){} };
+                        notifContainer.prepend(item);
+                    }
+                }catch(e){}
+            }catch(e){console.warn(e)}
+        }
+
+        function renderInbox(){
+            try{ privateMessages = JSON.parse(localStorage.getItem('privateMessages')||'{}'); }catch(e){ privateMessages = {}; }
+            const ids = Object.keys(privateMessages).sort();
+            const inbox = document.createElement('div');
+            const el = document.getElementById('inboxNotifications'); if (!el) return;
+            el.innerHTML = '';
+            for (const id of ids){ const parts=id.split(':'); const ip=parts[0]; const port=parts[1]; const list=privateMessages[id]||[]; const last=list.length?list[list.length-1]:null; const label = last? (last.peerName||`${ip}:${port}`): `${ip}:${port}`; const div=document.createElement('div'); div.className='peer-item'; div.onclick = ()=>selectPeer({ip,port,name:label}); div.innerHTML = `<div style="display:flex;flex-direction:column"><strong>${label}</strong><small style=\"color:#666\">${ip}:${port}</small></div><div style=\"text-align:right\">${unreadPrivateByPeer[id] ? '<span class=\"badge\">'+unreadPrivateByPeer[id]+'</span>' : ''}</div>`; el.appendChild(div); }
+            // update unread count in chat strip
+            try{ const totalUnread = Object.values(unreadPrivateByPeer||{}).reduce((a,b)=>a+(b||0),0); const uc = document.getElementById('chatUnreadCount'); if (uc) uc.textContent = totalUnread; }catch(e){}
+        }
+
+        // Web inbox polling using tracker /pull-inbox for web clients
+        function startWebInboxPolling(){
+            stopPeerInboxPolling();
+            peerInboxInterval = setInterval(async ()=>{
+                try{
+                    if (!localPeer) return;
+                    const resp = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/pull-inbox?ip=${encodeURIComponent(localPeer.ip)}&port=${encodeURIComponent(localPeer.port)}`);
+                    if (!resp.ok) return;
+                    const body = await resp.json();
+                    const data = body && Array.isArray(body.messages) ? body.messages : [];
+                    if (!Array.isArray(data) || data.length===0) return;
+                    let shouldRender=false;
+                    for (const m of data){
+                        const channel = m && m.channel?m.channel:'private';
+                        if (channel!=='private') continue;
+                        const from = m.from||{};
+                        const parsedPort = Number(from.port) || 0;
+                        const peerObj={ip:from.ip||'unknown',port:parsedPort,name:from.name||`${from.ip}:${from.port}`};
+                        const text = m.message||m.raw||'';
+                        const mid = m.id || null;
+                        console.debug('[WebInbox] incoming', {from: peerObj, text, id: mid});
+                        // record last event for debug panel (preserve tracker timestamp when available)
+                        try { window.__lastInboxEvent = {from: peerObj, text, id: mid, ts: (m.ts || m.time || Date.now())}; } catch(e){}
+                        try{
+                            const incomingTs = (m.ts || m.time || m.ts_ms || Date.now());
+                            const newly = storePrivateMessage(peerObj, text, 'received', mid, incomingTs);
+                            console.debug('[WebInbox] stored?', newly, peerObj, mid, 'ts=', incomingTs);
+                            if (newly){
+                                const pid=`${peerObj.ip}:${peerObj.port}`;
+                                // always show a brief toast so the user sees incoming private messages
+                                try{ showNotification('New private message', `From ${peerObj.name}`); }catch(e){}
+                                if (selectedPeer && selectedPeer.ip===peerObj.ip && Number(selectedPeer.port)===Number(peerObj.port)){
+                                    shouldRender=true;
+                                } else {
+                                    unreadPrivateByPeer[pid] = (unreadPrivateByPeer[pid]||0)+1;
+                                    try{ addInboxNotification(peerObj,text); }catch(e){}
+                                    try{ showInboxPopup(peerObj, text); }catch(e){}
+                                }
+                            }
+                        }catch(e){ console.warn('storePrivateMessage failed', e); }
+                    }
+                    if (shouldRender && selectedPeer) renderPrivateMessagesFor(selectedPeer);
+                }catch(e){}
+            },1500);
+        }
+
+        // Force pull-inbox once and update debug panel
+        async function fetchInboxOnce(){
+            if (!localPeer) return alert('Not connected');
+            try{
+                const resp = await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/pull-inbox?ip=${encodeURIComponent(localPeer.ip)}&port=${encodeURIComponent(localPeer.port)}`);
+                if (!resp.ok) { alert('Tracker pull-inbox failed: '+resp.status); return; }
+                const body = await resp.json();
+                const data = body && Array.isArray(body.messages) ? body.messages : [];
+                window.__lastInboxEvent = {pulled: true, count: data.length, ts: Date.now(), raw: data.slice(0,5)};
+                // process like poll
+                for (const m of data){
+                    const channel = m && m.channel?m.channel:'private';
+                    if (channel!=='private') continue;
+                    const from = m.from||{};
+                    const peerObj={ip:from.ip||'unknown',port:Number(from.port)||0,name:from.name||`${from.ip}:${from.port}`};
+                    const text = m.message||m.raw||'';
+                    const mid = m.id || null;
+                    try{
+                        const incomingTs = (m.ts || m.time || m.ts_ms || Date.now());
+                        const newly = storePrivateMessage(peerObj, text, 'received', mid, incomingTs);
+                        if (newly){
+                            const pid=`${peerObj.ip}:${peerObj.port}`;
+                            // always show a brief toast for incoming private messages
+                            try{ showNotification('New private message', `From ${peerObj.name}`); }catch(e){}
+                            if (selectedPeer && selectedPeer.ip===peerObj.ip && Number(selectedPeer.port)===Number(peerObj.port)) {
+                                try{ renderPrivateMessagesFor(selectedPeer); }catch(e){}
+                            } else {
+                                unreadPrivateByPeer[pid] = (unreadPrivateByPeer[pid]||0)+1;
+                                try{ addInboxNotification(peerObj,text); }catch(e){}
+                                try{ showInboxPopup(peerObj, text); }catch(e){}
+                            }
+                        }
+                    }catch(e){ console.warn('fetchInboxOnce store failed', e); }
+                }
+                renderDebugStorage();
+            }catch(e){ console.error('fetchInboxOnce failed', e); alert('fetchInboxOnce failed see console'); }
+        }
+
+        function renderDebugStorage(){
+            try{ document.getElementById('dbgSelected').textContent = JSON.stringify(selectedPeer||null,null,2); }catch(e){}
+            try{ document.getElementById('dbgUnread').textContent = JSON.stringify(unreadPrivateByPeer||{},null,2); }catch(e){}
+            try{ const keys = Object.keys(privateMessages||{}); document.getElementById('dbgKeys').textContent = keys.join('\n')||'-'; }catch(e){}
+            try{ document.getElementById('dbgEvents').textContent = JSON.stringify(window.__lastInboxEvent||'-',null,2); }catch(e){}
+        }
+
+        function toggleDebug(){ const p = document.getElementById('debugPanel'); if (!p) return; if (p.style.display==='block'){ p.style.display='none'; p.setAttribute('aria-hidden','true'); } else { p.style.display='block'; p.setAttribute('aria-hidden','false'); renderDebugStorage(); } }
+
+        function clearPrivateMessages(){ if (confirm('Clear local private messages?')){ privateMessages={}; try{ localStorage.removeItem('privateMessages'); }catch(e){} renderDebugStorage(); alert('cleared'); } }
+
+        // Select a peer to chat with
+        function selectPeer(peer) {
+                    selectedPeer = { ip: peer.ip, port: Number(peer.port), name: peer.name };
+                    // switch to private mode first so subsequent title update shows private-only context
+                    try { document.querySelector('input[name="mode"][value="private"]').checked = true; onModeChange(); } catch(e){}
+                    updateChatTitle();
+                    // clear unread counter for this peer
+                    try { unreadPrivateByPeer[`${selectedPeer.ip}:${selectedPeer.port}`] = 0; } catch(e){}
+                    hideOnlinePopup();
+                    refreshPeers(); // Highlight selected peer
+                    document.getElementById('messages').innerHTML = '';
+                    updateStatus(`Chatting with ${selectedPeer.name} (${selectedPeer.ip}:${selectedPeer.port})`, 'success');
+                    try { renderPrivateMessagesFor(selectedPeer); } catch(e){}
+                    // ensure web inbox polling is active so replies/queued messages arrive
+                    try { startWebInboxPolling(); } catch(e){}
+                    // update mode indicator
+                    try{ const ms = document.getElementById('chatModeStrip'); if (ms) ms.textContent = 'private'; }catch(e){}
+                }
+
+        // Send message
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            if (!localPeer) {
+                updateStatus('Please initialize peer first', 'error');
+                return;
+            }
+            // Allow sending to channel (tracker) even when no peer is selected.
+            if (!currentChannel) {
+                updateStatus('Please join a channel first', 'error');
+                return;
+            }
+
+            try {
+                // Sender identity is the local display name
+                let sender = { ip: localPeer.ip, port: localPeer.port, name: localPeer.name || 'WebApp' };
+                const payload = { from: sender, channel: currentChannel, message: message };
+
+                // small helper for timeouts
+                const fetchWithTimeout = (url, opts = {}, timeout = 800) => {
+                    const ac = new AbortController();
+                    const id = setTimeout(() => ac.abort(), timeout);
+                    return fetch(url, { ...opts, signal: ac.signal }).finally(() => clearTimeout(id));
+                };
+
+                // Determine mode: channel (broadcast) or private
+                const mode = document.querySelector('input[name="mode"]:checked') ? document.querySelector('input[name="mode"]:checked').value : 'channel';
+                let peerOk = false;
+                if (mode === 'private') {
+                    payload.channel = 'private';
+                    if (!selectedPeer) { updateStatus('Please select or set a target peer for private chat', 'error'); return; }
+
+                    // generate stable id for dedupe
+                    const msgId = `${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+                    payload.id = msgId;
+
+                    // store locally first so UI is immediate
+                    try { storePrivateMessage(selectedPeer, message, 'sent', msgId); } catch(e){}
+                    try { renderPrivateMessagesFor(selectedPeer); } catch(e){}
+                    messageInput.value = '';
+
+                    // Primary path for web clients: send to tracker so message is queued or forwarded.
+                    try {
+                        const respTracker = await fetchWithTimeout(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/send-private`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ to: { ip: selectedPeer.ip, port: selectedPeer.port }, from: sender, message: message, id: msgId })
+                        }, 2500);
+                        if (!respTracker) {
+                            console.error('No response from tracker /send-private');
+                            updateStatus('Tracker did not respond to send-private', 'error');
+                        } else if (!respTracker.ok) {
+                            const txt = await respTracker.text().catch(()=>'<no body>');
+                            console.error('Tracker /send-private returned error', respTracker.status, txt);
+                            updateStatus(`Tracker send-private failed (${respTracker.status})`, 'error');
+                        } else {
+                            try { const js = await respTracker.json(); const s = js.status || 'ok'; updateStatus(`Tracker accepted private message (${s})`, 'success'); } catch(e){ updateStatus('Tracker accepted private message', 'success'); }
+                        }
+                    } catch(e) {
+                        console.error('Tracker send-private threw', e);
+                        updateStatus('Failed to send private message to tracker (network error)', 'error');
+                    }
+
+                    // Also attempt a direct peer POST in background (non-blocking). This may fail due to CORS but can succeed for CLI peers.
+                    (async ()=>{
+                        try{
+                            const url = `http://${selectedPeer.ip}:${selectedPeer.port}/p2p/receive`;
+                            await fetchWithTimeout(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }, 400);
+                        }catch(_e){ /* ignore background direct-send failures */ }
+                    })();
+                } else {
+                    // Channel mode: send to tracker broadcast and local queue
+                    try {
+                        await fetchWithTimeout(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/broadcast-peer`, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                        }, 1200);
+                    } catch (e) {
+                        // ignore
+                    }
+                    try { localPendingChannelMessages.push({ from: sender, message: message, ts: Date.now(), channel: currentChannel }); } catch(e) {}
+                    addMessage(`${sender.name}: ${message}`, 'sent', Date.now());
+                    messageInput.value = '';
+                    updateStatus('Message sent to channel (or queued)', 'success');
+                }
+            } catch (e) {
+                updateStatus(`Error: ${e && e.message ? e.message : e}`, 'error');
+            }
+        }
+
+        // Format timestamp for display. Accepts seconds or milliseconds.
+        function formatTs(ts){
+            if (!ts) return new Date().toLocaleTimeString();
+            const n = Number(ts) || 0;
+            // if ts looks like seconds (less than 1e12) convert to ms
+            const ms = n < 1e12 ? n * 1000 : n;
+            try{ return new Date(ms).toLocaleTimeString(); }catch(e){ return new Date().toLocaleTimeString(); }
+        }
+
+        // Add message to chat; optional ts (epoch seconds or ms) to use stored send time
+        function addMessage(text, type, ts) {
+            const messagesDiv = document.getElementById('messages');
+            const time = ts ? formatTs(ts) : new Date().toLocaleTimeString();
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${type}`;
+            msgDiv.innerHTML = `
+                ${text}
+                <div class="message-time">${time}</div>
+            `;
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // Private message storage and inbox polling
+        // Returns true if the message was newly stored (not a duplicate)
+        function storePrivateMessage(peer, text, dir, mid, ts) {
+            const id = `${peer.ip}:${peer.port}`;
+            privateMessages[id] = privateMessages[id] || [];
+            // dedupe by message id when provided
+            if (mid) {
+                const exists = privateMessages[id].some(x => x.id && x.id === mid);
+                if (exists) { console.debug('[storePrivateMessage] duplicate by id', mid, id); return false; }
+            }
+            // fallback dedupe: skip if last message has same text and dir within 2s
+            const last = privateMessages[id].length ? privateMessages[id][privateMessages[id].length-1] : null;
+            const now = ts ? Number(ts) : Date.now();
+            if (!mid && last && last.text === text && last.dir === dir && (now - (last.ts || 0)) < 2000) {
+                return false; // likely duplicate
+            }
+            const entry = { text: text, dir: dir, ts: now, peerName: peer.name };
+            if (mid) entry.id = mid;
+            privateMessages[id].push(entry);
+            try { localStorage.setItem('privateMessages', JSON.stringify(privateMessages)); } catch(e){ console.warn('localStorage set failed', e); }
+            console.debug('[storePrivateMessage] stored', {id, entry});
+            // update inbox UI immediately
+            try { renderInbox(); } catch(e) { console.warn('renderInbox after store failed', e); }
+            return true;
+        }
+
+        function loadPrivateMessages() {
+            try {
+                const raw = localStorage.getItem('privateMessages');
+                if (raw) privateMessages = JSON.parse(raw);
+            } catch(e) { privateMessages = {}; }
+        }
+
+        function renderPrivateMessagesFor(peer) {
+            loadPrivateMessages();
+            const id = `${peer.ip}:${peer.port}`;
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = '';
+            const list = privateMessages[id] || [];
+            for (const m of list) {
+                const type = m.dir === 'sent' ? 'sent' : 'received';
+                const label = (m.dir === 'sent') ? 'You' : (m.peerName || peer.name);
+                addMessage(`${label}: ${m.text}`, type, m.ts || m.time || m.ts_ms);
+            }
+        }
+
+        function startPeerInboxPolling() {
+            stopPeerInboxPolling();
+            peerInboxInterval = setInterval(async () => {
+                try {
+                    const mode = document.querySelector('input[name="mode"]:checked') ? document.querySelector('input[name="mode"]:checked').value : 'channel';
+                    if (mode !== 'private') return;
+                    if (!localPeer) return;
+                    const resp = await fetch(`http://${localPeer.ip}:${localPeer.port}/peer-inbox`);
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    if (!Array.isArray(data) || data.length === 0) return;
+                    let shouldRender = false;
+                    for (const m of data) {
+                        // Only treat peer-inbox messages as private if they were sent with channel === 'private'
+                        const channel = m && m.channel ? m.channel : 'general';
+                        if (channel !== 'private') continue;
+                        const from = (m && m.from) || {};
+                        const peerObj = { ip: from.ip || 'unknown', port: Number(from.port) || 0, name: from.name || `${from.ip || 'unknown'}:${from.port || 0}` };
+                        const text = m.message || m.raw || '';
+                        const mid = m.id || null;
+                        console.debug('[PeerInbox] incoming', {from: peerObj, text, id: mid});
+                        try {
+                            const incomingTs = (m.ts || m.time || m.ts_ms || Date.now());
+                            const newly = storePrivateMessage(peerObj, text, 'received', mid, incomingTs);
+                            if (newly) {
+                                const pid = `${peerObj.ip}:${peerObj.port}`;
+                                // always show a brief toast for incoming private messages
+                                try{ showNotification('New private message', `From ${peerObj.name}`); }catch(e){}
+                                if (selectedPeer && selectedPeer.ip === peerObj.ip && Number(selectedPeer.port) === Number(peerObj.port)) {
+                                    shouldRender = true;
+                                } else {
+                                    unreadPrivateByPeer[pid] = (unreadPrivateByPeer[pid]||0) + 1;
+                                    addInboxNotification(peerObj, text);
+                                    try{ showInboxPopup(peerObj, text); }catch(e){}
+                                }
+                            }
+                        } catch(e){ console.warn('peerInbox store failed', e); }
+                    }
+                    if (shouldRender && selectedPeer) {
+                        try { renderPrivateMessagesFor(selectedPeer); } catch(e){}
+                    }
+                } catch(e) {
+                    // ignore polling errors
+                }
+            }, 1500);
+        }
+
+        function stopPeerInboxPolling() {
+            if (peerInboxInterval) { clearInterval(peerInboxInterval); peerInboxInterval = null; }
+        }
+
+        function setTargetPeerFromPrivate() {
+            const ip = document.getElementById('targetIp').value || document.getElementById('peerIp').value;
+            const port = parseInt(document.getElementById('targetPort').value || document.getElementById('peerPort').value);
+            const name = `${ip}:${port}`;
+            if (!ip || !port) { updateStatus('Please enter Peer IP and Port', 'error'); return; }
+            selectedPeer = { ip: ip, port: port, name: name };
+            document.getElementById('chatTitle').textContent = `Chatting with ${selectedPeer.name}`;
+            document.getElementById('messages').innerHTML = '';
+            updateStatus(`Target peer set: ${selectedPeer.name} (${selectedPeer.ip}:${selectedPeer.port})`, 'success');
+            try { document.querySelector('input[name="mode"][value="private"]').checked = true; onModeChange(); } catch(e){}
+            // web clients use tracker polling; ensure web inbox polling is running
+            try { startWebInboxPolling(); } catch(e){}
+        }
+
+        // Attempt to unregister from tracker and clear local state
+        async function unregisterLocalPeer(){
+            if (!localPeer) {
+                updateStatus('Not registered', 'error');
+                return;
+            }
+            try {
+                const ac = new AbortController();
+                const to = setTimeout(()=>ac.abort(), 4000);
+                try{
+                    await fetch(`http://${localPeer.trackerIp}:${localPeer.trackerPort}/remove-info`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ ip: localPeer.ip, port: localPeer.port }), signal: ac.signal });
+                }catch(e){ /* best-effort unregister; ignore errors */ }
+                clearTimeout(to);
+            } catch(e) {}
+            // clear state
+            try { clearInterval(pollInterval); pollInterval = null; } catch(e){}
+            try { stopPeerInboxPolling(); } catch(e){}
+            try { if (channelPollInterval) { clearInterval(channelPollInterval); channelPollInterval = null; } } catch(e){}
+            try { localPeer = null; selectedPeer = null; document.getElementById('messages').innerHTML=''; updateStatus('Logged out locally', 'default'); } catch(e){}
+            try { const lb = document.getElementById('logoutBtn'); if (lb){ lb.disabled = true; lb.textContent = 'Logout'; } } catch(e){}
+            // Re-enable registration inputs so user can connect again from this tab
+            try{ const ipEl = document.getElementById('peerIp'); if (ipEl) ipEl.disabled = false; }catch(e){}
+            try{ const portEl = document.getElementById('peerPort'); if (portEl) portEl.disabled = false; }catch(e){}
+            try{ const uf = document.getElementById('useFixedPort'); if (uf) uf.disabled = false; }catch(e){}
+            try{ const cb = document.getElementById('connectBtn'); if (cb){ cb.disabled = false; cb.textContent = 'Connect'; } }catch(e){}
+        }
+
+        function onModeChange() {
+            const mode = document.querySelector('input[name="mode"]:checked') ? document.querySelector('input[name="mode"]:checked').value : 'channel';
+            if (mode === 'private') {
+                try { document.getElementById('privateTarget').style.display = 'block'; } catch(e){}
+                try { document.getElementById('channelBlock').style.display = 'none'; } catch(e){}
+                // For web clients, use tracker inbox polling. startWebInboxPolling already runs on connect.
+            } else {
+                try { document.getElementById('privateTarget').style.display = 'none'; } catch(e){}
+                try { document.getElementById('channelBlock').style.display = 'block'; } catch(e){}
+                // stop any peer-inbox polling (not used in browser)
+                stopPeerInboxPolling();
+                refreshPeers();
+            }
+            // update visible mode indicator
+            try{ const ms = document.getElementById('chatModeStrip'); if (ms) ms.textContent = mode; }catch(e){}
+            try{ updateChatTitle(); }catch(e){}
+        }
+
+        // Update status
+        function updateStatus(msg, type = 'default') {
+            const status = document.getElementById('status');
+            status.textContent = msg;
+            status.className = `status ${type}`;
+        }
+
+        // Key events
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            updateStatus('Ready! Configure peer settings and connect', 'default');
+            try {
+                const radios = document.querySelectorAll('input[name="mode"]');
+                radios.forEach(r => r.addEventListener('change', onModeChange));
+                onModeChange();
+            } catch(e) {}
+        });
+    </script>
+</body>
+</html>
